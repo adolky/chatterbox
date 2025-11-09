@@ -9,6 +9,13 @@ from datetime import datetime
 import shutil
 import re
 import gc
+import warnings
+import logging
+
+# Désactiver les warnings pour une génération plus propre
+warnings.filterwarnings('ignore')
+logging.getLogger('chatterbox').setLevel(logging.ERROR)
+logging.getLogger('transformers').setLevel(logging.ERROR)
 
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -97,14 +104,23 @@ def generate(model, text, language, audio_prompt_path, exaggeration, temperature
     if not text or text.strip() == "":
         raise gr.Error("⚠️ Veuillez entrer du texte ou charger un fichier !")
     
+    # Optimisation spéciale pour le français : désactiver la détection de répétition
+    use_analyzer = False if language == "fr" else None  # False pour français, None pour autres
+    
     # Ajustement automatique de max_tokens selon la langue
-    # Le français et certaines langues nécessitent plus de tokens
-    if language in ["fr", "de", "pl", "ru", "fi", "el"] and max_tokens < 600:
+    # Pour le français en mode optimisé, on utilise des valeurs plus basses
+    if language == "fr":
+        # Français optimisé : max_tokens plus bas car pas de détection de répétition
+        if max_tokens > 400:
+            adjusted_max_tokens = min(int(max_tokens * 0.7), 350)  # Réduire pour vitesse
+            print(f"⚡ Français mode RAPIDE - réduction max_tokens: {max_tokens} → {adjusted_max_tokens}")
+            max_tokens = adjusted_max_tokens
+    elif language in ["de", "pl", "ru", "fi", "el"] and max_tokens < 600:
         adjusted_max_tokens = int(max_tokens * 1.5)  # +50% pour ces langues
         print(f"⚠️ Langue {language} détectée - augmentation max_tokens: {max_tokens} → {adjusted_max_tokens}")
         max_tokens = adjusted_max_tokens
     
-    print(f"📝 Text length: {len(text)} chars, Language: {language}, Batch size: {batch_size}, Max tokens: {max_tokens}")
+    print(f"📝 Text: {len(text)} chars | Language: {language} | Batch: {batch_size} | Max tokens: {max_tokens} | Analyzer: {use_analyzer}")
     
     # Split long text into sentences to avoid memory issues
     sentences = re.split(r'(?<=[.!?])\s+', text)
@@ -186,6 +202,7 @@ def generate(model, text, language, audio_prompt_path, exaggeration, temperature
                 top_p=top_p,
                 repetition_penalty=repetition_penalty,
                 max_new_tokens=int(max_tokens),
+                use_alignment_analyzer=use_analyzer,  # False pour français = RAPIDE!
             )
             all_wavs.append(wav.squeeze(0))
             
@@ -267,15 +284,15 @@ with gr.Blocks(title="Chatterbox TTS - Longue Durée Multilingue") as demo:
             with gr.Accordion("⚙️ Options Avancées", open=False):
                 max_tokens = gr.Slider(
                     100, 1000, step=50, 
-                    label="🚀 Max Tokens (CRITIQUE POUR VITESSE!)", 
-                    value=600,
-                    info="Français/Allemand: 600-800 | Anglais: 400-500 | Plus bas = plus rapide mais risque de coupure"
+                    label="🚀 Max Tokens", 
+                    value=350,
+                    info="🇫🇷 Français: 300-350 (RAPIDE!) | 🇬🇧 Anglais: 400-500 | Autres: 600-800"
                 )
                 batch_size = gr.Slider(
                     200, 800, step=50, 
                     label="⚡ Taille des lots (caractères)", 
-                    value=350,
-                    info="Plus petit = plus rapide mais plus de découpage (recommandé: 350-400)"
+                    value=300,
+                    info="🇫🇷 Français: 250-300 | 🇬🇧 Anglais: 350-400 | Optimal pour vitesse"
                 )
                 seed_num = gr.Number(value=0, label="Graine aléatoire (0 = aléatoire)")
                 temp = gr.Slider(0.05, 5, step=.05, label="Température", value=.8)

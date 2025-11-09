@@ -227,6 +227,7 @@ class T3(nn.Module):
         length_penalty=1.0,
         repetition_penalty=1.2,
         cfg_weight=0.5,
+        use_alignment_analyzer=None,  # None = auto (True for multilingual), False = force disable
     ):
         """
         Args:
@@ -259,7 +260,9 @@ class T3(nn.Module):
         if not self.compiled:
             # Default to None for English models, only create for multilingual
             alignment_stream_analyzer = None
-            if self.hp.is_multilingual:
+            # Allow manual override via use_alignment_analyzer parameter
+            should_use_analyzer = use_alignment_analyzer if use_alignment_analyzer is not None else self.hp.is_multilingual
+            if should_use_analyzer:
                 alignment_stream_analyzer = AlignmentStreamAnalyzer(
                     self.tfmr,
                     None,

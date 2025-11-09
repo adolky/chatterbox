@@ -151,16 +151,18 @@ class AlignmentStreamAnalyzer:
             if len(self.generated_tokens) > 8:
                 self.generated_tokens = self.generated_tokens[-8:]
             
-        # Check for excessive token repetition (3x same token in a row)
+        # Check for excessive token repetition (6x same token in a row)
+        # DISABLED for multilingual models - token repetition is too aggressive for non-English
+        # Only keep very extreme cases (6+ repetitions)
         token_repetition = (
             # self.complete and 
-            len(self.generated_tokens) >= 3 and
-            len(set(self.generated_tokens[-2:])) == 1
+            len(self.generated_tokens) >= 6 and
+            len(set(self.generated_tokens[-6:])) == 1
         )
         
         if token_repetition:
             repeated_token = self.generated_tokens[-1]
-            logger.warning(f"🚨 Detected 2x repetition of token {repeated_token}")
+            logger.warning(f"🚨 Detected 6x repetition of token {repeated_token}")
             
         # Suppress EoS to prevent early termination
         if cur_text_posn < S - 3 and S > 5:  # Only suppress if text is longer than 5 tokens
@@ -168,8 +170,9 @@ class AlignmentStreamAnalyzer:
 
         # If a bad ending is detected, force emit EOS by modifying logits
         # NOTE: this means logits may be inconsistent with latents!
-        if long_tail or alignment_repetition or token_repetition:
-            logger.warning(f"forcing EOS token, {long_tail=}, {alignment_repetition=}, {token_repetition=}")
+        # IMPORTANT: Removed token_repetition from this check to avoid premature EOS in multilingual
+        if long_tail or alignment_repetition:
+            logger.warning(f"forcing EOS token, {long_tail=}, {alignment_repetition=}, token_repetition={token_repetition}")
             # (±2**15 is safe for all dtypes >= 16bit)
             logits = -(2**15) * torch.ones_like(logits)
             logits[..., self.eos_idx] = 2**15

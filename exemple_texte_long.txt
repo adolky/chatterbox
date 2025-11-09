@@ -1,0 +1,25 @@
+Exemple de texte long pour générer un audio de plusieurs heures avec Chatterbox TTS.
+
+Ce fichier peut contenir n'importe quel texte que vous souhaitez convertir en audio. Vous pouvez le modifier avec votre propre contenu.
+
+Quelques conseils pour de meilleurs résultats :
+
+1. Divisez votre texte en paragraphes naturels
+2. Utilisez une ponctuation appropriée pour de meilleures pauses
+3. Évitez les caractères spéciaux complexes
+4. Pour un audio de 1 heure, visez environ 9,000 mots
+5. Pour un audio de 2 heures, visez environ 18,000 mots
+
+Exemple de contenu :
+
+The story begins on a cold winter morning. The sun was just starting to peek over the horizon, casting long shadows across the snow-covered landscape. Birds were beginning to stir, their cheerful songs breaking the silence of the early dawn.
+
+In the distance, a figure could be seen making their way through the pristine white blanket that covered everything. Each step left a deep footprint, marking a solitary path through the wilderness. The figure was bundled up against the cold, their breath creating small clouds of vapor in the frigid air.
+
+As the morning progressed, the world slowly came to life. The sun climbed higher in the sky, its weak winter rays doing little to warm the frozen earth. Yet there was a beauty in the starkness of the season, a quiet majesty that demanded respect and appreciation.
+
+This is just an example. Replace this content with your own text, whether it's a story, an article, a book chapter, or any other content you want to convert to audio.
+
+You can add as much text as you want here. The Chatterbox TTS system will process it all and generate the corresponding audio file.
+
+Bonne génération audio !

@@ -96,7 +96,7 @@ def load_saved_voice(voice_filename):
     return None
 
 
-def generate(model, text, language, audio_prompt_path, exaggeration, temperature, seed_num, cfgw, min_p, top_p, repetition_penalty, batch_size, max_tokens):
+def generate(model, text, language, audio_prompt_path, exaggeration, temperature, seed_num, cfgw, min_p, top_p, repetition_penalty, batch_size, max_tokens, progress=gr.Progress()):
     if model is None:
         model = ChatterboxMultilingualTTS.from_pretrained(DEVICE)
     if seed_num != 0:
@@ -221,8 +221,29 @@ def generate(model, text, language, audio_prompt_path, exaggeration, temperature
     if current_batch:
         batches.append(" ".join(current_batch))
     
+    # 🕐 CALCUL DU TEMPS ESTIMÉ
+    # Estimation basée sur le nombre de batches et la longueur totale
+    total_chars = len(text)
+    num_batches = len(batches)
+    
+    # Temps par batch: ~75-90 secondes en moyenne (varie selon GPU)
+    estimated_time_per_batch = 80  # secondes
+    total_estimated_seconds = num_batches * estimated_time_per_batch
+    
+    # Convertir en minutes
+    estimated_minutes = total_estimated_seconds / 60
+    
+    print(f"\n⏱️  ESTIMATION DE TEMPS:")
+    print(f"   📝 Texte: {total_chars} caractères")
+    print(f"   📦 Batches: {num_batches}")
+    print(f"   ⏰ Temps estimé: {estimated_minutes:.1f} minutes ({total_estimated_seconds//60:.0f}min {total_estimated_seconds%60:.0f}s)")
+    print(f"   🚀 Démarrage de la génération...\n")
+    
+    # Initialiser la progression
+    progress(0, desc=f"🎙️ Préparation... {num_batches} batches à générer")
+    
     # Afficher les détails des batches
-    print(f"\n📦 Processing {len(batches)} batches")
+    print(f"📦 Processing {len(batches)} batches")
     print(f"📋 Batch details:")
     for idx, batch in enumerate(batches):
         words = len(batch.split())
@@ -245,7 +266,25 @@ def generate(model, text, language, audio_prompt_path, exaggeration, temperature
     # Cleanup seulement tous les 8 batches au lieu de 3
     BATCHES_PER_GROUP = 8  # Traiter 8 batches avant de cleanup (au lieu de 3)
     
+    # Timer pour le temps réel
+    import time
+    start_time = time.time()
+    
     for i, batch_text in enumerate(batches):
+        # Mettre à jour la progression avec détails
+        batch_progress = (i / len(batches))
+        elapsed = time.time() - start_time
+        elapsed_min = elapsed / 60
+        
+        # Calculer temps restant basé sur le progrès réel
+        if i > 0:
+            avg_time_per_batch = elapsed / i
+            remaining_batches = len(batches) - i
+            estimated_remaining = (avg_time_per_batch * remaining_batches) / 60
+            progress(batch_progress, desc=f"🎙️ Batch {i+1}/{len(batches)} | ⏱️ {elapsed_min:.1f}min écoulées | ~{estimated_remaining:.1f}min restantes")
+        else:
+            progress(batch_progress, desc=f"🎙️ Batch {i+1}/{len(batches)} | Démarrage...")
+        
         print(f"🔊 Batch {i+1}/{len(batches)}: {len(batch_text)} chars")
         print(f"   Preview: {batch_text[:80]}..." if len(batch_text) > 80 else f"   Text: {batch_text}")
         
@@ -305,10 +344,15 @@ def generate(model, text, language, audio_prompt_path, exaggeration, temperature
             continue
     
     # 🧹 Cleanup final après tous les batches
+    progress(0.99, desc="🧹 Nettoyage final de la mémoire GPU...")
     print(f"\n🧹 Final GPU cleanup")
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     gc.collect()
+    
+    # Calculer le temps total écoulé
+    total_elapsed = time.time() - start_time
+    total_elapsed_min = total_elapsed / 60
     
     # Vérifier qu'on a bien généré tous les batches
     if len(all_wavs) == 0:
@@ -318,13 +362,31 @@ def generate(model, text, language, audio_prompt_path, exaggeration, temperature
         print(f"⚠️ WARNING: Seulement {len(all_wavs)}/{len(batches)} batches générés avec succès")
         print(f"   → Certaines parties du texte peuvent manquer dans l'audio")
     
+    progress(1.0, desc="✅ Assemblage final de l'audio...")
     combined_wav = torch.cat(all_wavs, dim=-1)
     sr = model.sr
     
     total_duration = combined_wav.shape[-1] / sr
     expected_duration = len(text) / 15  # Approximation: 15 caractères par seconde
-    print(f"✅ Generated {len(all_wavs)}/{len(batches)} batches, total: {total_duration:.2f}s")
-    print(f"   Texte: {len(text)} chars | Audio attendu: ~{expected_duration:.0f}s | Audio réel: {total_duration:.0f}s")
+    
+    # Afficher le résumé final avec temps réel vs estimé
+    print(f"\n{'='*60}")
+    print(f"✅ GÉNÉRATION TERMINÉE !")
+    print(f"{'='*60}")
+    print(f"📊 Statistiques:")
+    print(f"   ✅ Batches générés: {len(all_wavs)}/{len(batches)}")
+    print(f"   🎵 Audio généré: {total_duration:.2f}s ({total_duration/60:.2f} min)")
+    print(f"   ⏱️  Temps de génération: {total_elapsed_min:.2f} min")
+    print(f"   ⚡ Vitesse: {total_duration/60 / total_elapsed_min:.2f}x temps réel")
+    print(f"   📝 Texte: {len(text)} caractères")
+    
+    # Comparer estimation vs réalité
+    accuracy = (total_elapsed_min / estimated_minutes) * 100
+    print(f"\n🎯 Précision de l'estimation:")
+    print(f"   Estimé: {estimated_minutes:.1f} min")
+    print(f"   Réel: {total_elapsed_min:.1f} min")
+    print(f"   Précision: {accuracy:.0f}%")
+    print(f"{'='*60}\n")
     
     if total_duration < expected_duration * 0.7:
         print(f"⚠️ WARNING: L'audio semble trop court - vérifiez si du texte a été sauté")

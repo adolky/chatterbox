@@ -281,9 +281,17 @@ def generate(model, text, language, audio_prompt_path, exaggeration, temperature
             avg_time_per_batch = elapsed / i
             remaining_batches = len(batches) - i
             estimated_remaining = (avg_time_per_batch * remaining_batches) / 60
-            progress(batch_progress, desc=f"🎙️ Batch {i+1}/{len(batches)} | ⏱️ {elapsed_min:.1f}min écoulées | ~{estimated_remaining:.1f}min restantes")
+            progress_desc = (
+                f"🎙️ Batch {i+1}/{len(batches)} | ⏱️ {elapsed_min:.1f}min écoulées | ~{estimated_remaining:.1f}min restantes\n"
+                f"⏰ Temps estimé total: {estimated_minutes:.1f} minutes"
+            )
+            progress(batch_progress, desc=progress_desc)
         else:
-            progress(batch_progress, desc=f"🎙️ Batch {i+1}/{len(batches)} | Démarrage...")
+            progress_desc = (
+                f"🎙️ Batch {i+1}/{len(batches)} | Démarrage...\n"
+                f"⏰ Temps estimé total: {estimated_minutes:.1f} minutes"
+            )
+            progress(batch_progress, desc=progress_desc)
         
         print(f"🔊 Batch {i+1}/{len(batches)}: {len(batch_text)} chars")
         print(f"   Preview: {batch_text[:80]}..." if len(batch_text) > 80 else f"   Text: {batch_text}")

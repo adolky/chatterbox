@@ -108,68 +108,226 @@ def generate(model, text, language, audio_prompt_path, exaggeration, temperature
     # C'est la clé pour éviter la troncature prématurée du texte
     use_analyzer = False
     
+    # Optimisations spécifiques par langue pour maximiser vitesse ET qualité
+    # NOUVELLE RÈGLE: Max tokens ≤ 650 pour garantir texte complet
+    
+    if language == "en":
+        # 🇬🇧 Anglais : mots courts, phonétique simple
+        if max_tokens > 650:
+            max_tokens = 650
+            print(f"🇬🇧 Optimisation anglais - max_tokens ajusté à {max_tokens}")
+        if batch_size < 400:
+            batch_size = 400
+            print(f"🇬🇧 Optimisation anglais - batch_size ajusté à {batch_size}")
+            
+    elif language == "fr":
+        # 🇫🇷 Français : liaisons, phonétique complexe
+        if max_tokens > 650:
+            max_tokens = 650
+            print(f"🇫🇷 Optimisation français - max_tokens ajusté à {max_tokens}")
+        if batch_size > 300 or batch_size < 250:
+            batch_size = 280
+            print(f"🇫🇷 Optimisation français - batch_size ajusté à {batch_size}")
+            
+    elif language in ["es", "it", "pt"]:
+        # 🇪🇸🇮🇹🇵🇹 Langues romanes
+        if max_tokens > 650:
+            max_tokens = 650
+            print(f"🌍 Optimisation {language.upper()} - max_tokens ajusté à {max_tokens}")
+        if batch_size < 350:
+            batch_size = 350
+            print(f"🌍 Optimisation {language.upper()} - batch_size ajusté à {batch_size}")
+            
+    elif language in ["de", "nl"]:
+        # 🇩🇪🇳🇱 Allemand/Néerlandais : mots très longs
+        if max_tokens > 650:
+            max_tokens = 650
+            print(f"🇩🇪 Optimisation {language.upper()} - max_tokens ajusté à {max_tokens}")
+        if batch_size > 320:
+            batch_size = 320
+            print(f"🇩🇪 Optimisation {language.upper()} - batch_size ajusté à {batch_size}")
+            
+    elif language in ["ja", "zh", "ko"]:
+        # 🇯🇵🇨🇳🇰🇷 Langues asiatiques : caractères complexes
+        if max_tokens > 650:
+            max_tokens = 650
+            print(f"🌏 Optimisation {language.upper()} - max_tokens ajusté à {max_tokens}")
+        if batch_size > 250:
+            batch_size = 250
+            print(f"🌏 Optimisation {language.upper()} - batch_size ajusté à {batch_size}")
+            
+    elif language in ["ar", "he"]:
+        # 🇸🇦🇮🇱 Langues sémitiques : écriture RTL
+        if max_tokens > 650:
+            max_tokens = 650
+            print(f"🕌 Optimisation {language.upper()} - max_tokens ajusté à {max_tokens}")
+        if batch_size > 280:
+            batch_size = 280
+            print(f"🕌 Optimisation {language.upper()} - batch_size ajusté à {batch_size}")
+            
+    elif language in ["ru", "pl"]:
+        # 🇷🇺🇵🇱 Langues slaves : phonétique complexe
+        if max_tokens > 650:
+            max_tokens = 650
+            print(f"🇷🇺 Optimisation {language.upper()} - max_tokens ajusté à {max_tokens}")
+        if batch_size > 300:
+            batch_size = 300
+            print(f"🇷🇺 Optimisation {language.upper()} - batch_size ajusté à {batch_size}")
+            
+    else:
+        # 🌍 Autres langues : paramètres par défaut
+        if max_tokens > 650:
+            max_tokens = 650
+            print(f"🌍 Optimisation {language.upper()} - max_tokens ajusté à {max_tokens}")
+        if batch_size < 300:
+            batch_size = 300
+            print(f"🌍 Optimisation {language.upper()} - batch_size ajusté à {batch_size}")
+    
     print(f"📝 Text: {len(text)} chars | Language: {language} | Batch: {batch_size} | Max tokens: {max_tokens} | Analyzer: DISABLED")
     
     # Split long text into sentences to avoid memory issues
+    # 🎯 DÉCOUPAGE SIMPLE ET FIABLE PAR PHRASES COMPLÈTES
+    # RÈGLE ABSOLUE: Ne JAMAIS couper avant un point (.)
+    
+    # Étape 1: Découper en phrases complètes
     sentences = re.split(r'(?<=[.!?])\s+', text)
     
-    # For very long texts, process in smaller batches
-    MAX_CHARS_PER_BATCH = int(batch_size)
     batches = []
     current_batch = []
     current_length = 0
     
+    BATCH_LIMIT = int(batch_size)
+    
     for sentence in sentences:
-        if not sentence.strip():
+        sentence = sentence.strip()
+        if not sentence:
             continue
+        
         sentence_len = len(sentence)
-        if current_length + sentence_len > MAX_CHARS_PER_BATCH and current_batch:
+        
+        # Si ajouter cette phrase dépasse la limite ET on a déjà du contenu
+        if current_length + sentence_len > BATCH_LIMIT and current_batch:
+            # Sauvegarder le batch actuel (phrases complètes)
             batches.append(" ".join(current_batch))
+            # Démarrer un nouveau batch avec cette phrase
             current_batch = [sentence]
             current_length = sentence_len
         else:
+            # Ajouter la phrase au batch actuel
             current_batch.append(sentence)
             current_length += sentence_len
     
+    # Ajouter le dernier batch
     if current_batch:
         batches.append(" ".join(current_batch))
     
-    print(f"📦 Processing {len(batches)} batches")
+    # Afficher les détails des batches
+    print(f"\n📦 Processing {len(batches)} batches")
+    print(f"📋 Batch details:")
+    for idx, batch in enumerate(batches):
+        words = len(batch.split())
+        sentences_count = batch.count('.') + batch.count('!') + batch.count('?')
+        print(f"\n   Batch {idx+1}: {len(batch)} chars, ~{words} words, {sentences_count} sentences")
+        print(f"      Starts: {batch[:70]}...")
+        print(f"      Ends:   ...{batch[-70:]}")
+        # Vérifier que le batch se termine bien par . ! ou ?
+        if batch and batch[-1] not in '.!?':
+            print(f"      ⚠️ WARNING: Batch ne se termine PAS par un point!")
     
+    print(f"\n")
     all_wavs = []
     
     # Utiliser ChatterboxMultilingualTTS pour TOUTES les langues (y compris anglais)
     # Paramètres unifiés pour cohérence et qualité
     print(f"Using ChatterboxMultilingualTTS ({language}) - Unified settings")
     
+    # 🎯 Système de génération par groupe pour réduire le cleanup GPU
+    # Cleanup seulement tous les 8 batches au lieu de 3
+    BATCHES_PER_GROUP = 8  # Traiter 8 batches avant de cleanup (au lieu de 3)
+    
     for i, batch_text in enumerate(batches):
         print(f"🔊 Batch {i+1}/{len(batches)}: {len(batch_text)} chars")
+        print(f"   Preview: {batch_text[:80]}..." if len(batch_text) > 80 else f"   Text: {batch_text}")
         
-        wav = model.generate(
-            language_id=language,
-            text=batch_text,
-            audio_prompt_path=audio_prompt_path,
-            exaggeration=exaggeration,
-            temperature=temperature,
-            cfg_weight=cfgw,
-            min_p=min_p,
-            top_p=top_p,
-            repetition_penalty=repetition_penalty,
-            max_new_tokens=int(max_tokens),
-            use_alignment_analyzer=use_analyzer,  # DISABLED pour toutes les langues
-        )
-        all_wavs.append(wav.squeeze(0))
+        # Skip empty batches
+        if not batch_text or not batch_text.strip():
+            print(f"   ⚠️ Skipping empty batch")
+            continue
         
-        # Nettoyage mémoire seulement tous les 3 lots pour gagner du temps
-        if (i + 1) % 3 == 0:
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            gc.collect()
+        # 🎯 AJUSTEMENT DYNAMIQUE DES TOKENS basé sur la longueur
+        # Formule: Plus le batch est long, plus on donne de tokens
+        # Range: 500 (batch court) → 650 (batch long) - MAX 650
+        
+        batch_length_ratio = min(len(batch_text) / batch_size, 1.0)
+        # Calculer tokens: 500 + (150 × ratio) = 500 à 650
+        batch_max_tokens = int(500 + (150 * batch_length_ratio))
+        
+        # Garantir entre 500 et 650
+        batch_max_tokens = max(500, min(650, batch_max_tokens))
+        
+        print(f"   🎯 Tokens dynamiques: {batch_max_tokens} (longueur: {len(batch_text)}/{batch_size} = {batch_length_ratio*100:.0f}%)")
+        
+        try:
+            wav = model.generate(
+                language_id=language,
+                text=batch_text,
+                audio_prompt_path=audio_prompt_path,
+                exaggeration=exaggeration,
+                temperature=temperature,
+                cfg_weight=cfgw,
+                min_p=min_p,
+                top_p=top_p,
+                repetition_penalty=repetition_penalty,
+                max_new_tokens=int(batch_max_tokens),
+                use_alignment_analyzer=use_analyzer,  # DISABLED pour toutes les langues
+            )
+            
+            # Vérifier que l'audio a été généré
+            if wav is None or wav.numel() == 0:
+                print(f"   ❌ WARNING: Batch {i+1} generated empty audio!")
+                continue
+                
+            audio_duration = wav.shape[-1] / model.sr
+            print(f"   ✅ Generated {audio_duration:.2f}s of audio")
+            all_wavs.append(wav.squeeze(0))
+            
+            # 🧹 Cleanup GPU RÉDUIT: Seulement tous les 8 batches
+            # Gain de vitesse significatif en réduisant les cleanups
+            if (i + 1) % BATCHES_PER_GROUP == 0:
+                print(f"   🧹 GPU cleanup (every {BATCHES_PER_GROUP} batches)")
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                gc.collect()
+            
+        except Exception as e:
+            print(f"   ❌ ERROR generating batch {i+1}: {str(e)}")
+            print(f"   Skipping this batch and continuing...")
+            continue
+    
+    # 🧹 Cleanup final après tous les batches
+    print(f"\n🧹 Final GPU cleanup")
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    gc.collect()
+    
+    # Vérifier qu'on a bien généré tous les batches
+    if len(all_wavs) == 0:
+        raise gr.Error("❌ Aucun audio généré ! Vérifiez les paramètres et les logs.")
+    
+    if len(all_wavs) < len(batches):
+        print(f"⚠️ WARNING: Seulement {len(all_wavs)}/{len(batches)} batches générés avec succès")
+        print(f"   → Certaines parties du texte peuvent manquer dans l'audio")
     
     combined_wav = torch.cat(all_wavs, dim=-1)
     sr = model.sr
     
-    print(f"✅ Generated {len(batches)} batches, total: {combined_wav.shape[-1] / sr:.2f}s")
+    total_duration = combined_wav.shape[-1] / sr
+    expected_duration = len(text) / 15  # Approximation: 15 caractères par seconde
+    print(f"✅ Generated {len(all_wavs)}/{len(batches)} batches, total: {total_duration:.2f}s")
+    print(f"   Texte: {len(text)} chars | Audio attendu: ~{expected_duration:.0f}s | Audio réel: {total_duration:.0f}s")
+    
+    if total_duration < expected_duration * 0.7:
+        print(f"⚠️ WARNING: L'audio semble trop court - vérifiez si du texte a été sauté")
     
     return (sr, combined_wav.numpy())
 
@@ -239,20 +397,20 @@ with gr.Blocks(title="Chatterbox TTS - Longue Durée Multilingue") as demo:
                 max_tokens = gr.Slider(
                     100, 1500, step=50, 
                     label="🚀 Max Tokens", 
-                    value=800,
-                    info="Plus de tokens = texte plus long généré. 800-1000 recommandé pour textes longs"
+                    value=650,
+                    info="Auto-ajusté: 500-650 selon longueur batch | MAX 650 toutes langues | Cleanup GPU: 8 batches"
                 )
                 batch_size = gr.Slider(
                     200, 800, step=50, 
                     label="⚡ Taille des lots (caractères)", 
-                    value=300,
-                    info="🇫🇷 Français: 250-300 | 🇬🇧 Anglais: 350-400 | Optimal pour vitesse"
+                    value=400,
+                    info="Auto-optimisé par langue : 🇬🇧 EN=400 | 🇫🇷 FR=280 | 🇪🇸 ES/IT/PT=350 | Plus grand = plus rapide"
                 )
                 seed_num = gr.Number(value=0, label="Graine aléatoire (0 = aléatoire)")
                 temp = gr.Slider(0.05, 5, step=.05, label="Température", value=.8)
                 min_p = gr.Slider(0.00, 1.00, step=0.01, label="min_p (Recommandé 0.02-0.1, 0 = désactivé)", value=0.05)
                 top_p = gr.Slider(0.00, 1.00, step=0.01, label="top_p (1.0 = désactivé recommandé)", value=1.00)
-                repetition_penalty = gr.Slider(1.00, 2.00, step=0.01, label="Pénalité de répétition", value=1.00, info="1.00 = désactivé")
+                repetition_penalty = gr.Slider(1.00, 2.00, step=0.01, label="Pénalité de répétition", value=1.15, info="1.15 recommandé pour vitesse, 1.00 = désactivé")
             run_btn = gr.Button("🎬 Générer l'Audio", variant="primary", size="lg")
         with gr.Column():
             gr.Markdown("### 🔊 Sortie Audio")

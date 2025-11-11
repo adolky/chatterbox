@@ -104,23 +104,11 @@ def generate(model, text, language, audio_prompt_path, exaggeration, temperature
     if not text or text.strip() == "":
         raise gr.Error("⚠️ Veuillez entrer du texte ou charger un fichier !")
     
-    # Optimisation spéciale pour le français : désactiver la détection de répétition
-    use_analyzer = False if language == "fr" else None  # False pour français, None pour autres
+    # DÉSACTIVER la détection de répétition pour TOUTES les langues = qualité + vitesse
+    # C'est la clé pour éviter la troncature prématurée du texte
+    use_analyzer = False
     
-    # Ajustement automatique de max_tokens selon la langue
-    # Pour le français en mode optimisé, on utilise des valeurs plus basses
-    if language == "fr":
-        # Français optimisé : max_tokens plus bas car pas de détection de répétition
-        if max_tokens > 400:
-            adjusted_max_tokens = min(int(max_tokens * 0.7), 350)  # Réduire pour vitesse
-            print(f"⚡ Français mode RAPIDE - réduction max_tokens: {max_tokens} → {adjusted_max_tokens}")
-            max_tokens = adjusted_max_tokens
-    elif language in ["de", "pl", "ru", "fi", "el"] and max_tokens < 600:
-        adjusted_max_tokens = int(max_tokens * 1.5)  # +50% pour ces langues
-        print(f"⚠️ Langue {language} détectée - augmentation max_tokens: {max_tokens} → {adjusted_max_tokens}")
-        max_tokens = adjusted_max_tokens
-    
-    print(f"📝 Text: {len(text)} chars | Language: {language} | Batch: {batch_size} | Max tokens: {max_tokens} | Analyzer: {use_analyzer}")
+    print(f"📝 Text: {len(text)} chars | Language: {language} | Batch: {batch_size} | Max tokens: {max_tokens} | Analyzer: DISABLED")
     
     # Split long text into sentences to avoid memory issues
     sentences = re.split(r'(?<=[.!?])\s+', text)
@@ -150,70 +138,36 @@ def generate(model, text, language, audio_prompt_path, exaggeration, temperature
     
     all_wavs = []
     
-    # Use ChatterboxTTS for English, ChatterboxMultilingualTTS for other languages
-    if language == "en":
-        print("Using ChatterboxTTS (English)")
-        tts_model = ChatterboxTTS.from_pretrained(DEVICE)
+    # Utiliser ChatterboxMultilingualTTS pour TOUTES les langues (y compris anglais)
+    # Paramètres unifiés pour cohérence et qualité
+    print(f"Using ChatterboxMultilingualTTS ({language}) - Unified settings")
+    
+    for i, batch_text in enumerate(batches):
+        print(f"🔊 Batch {i+1}/{len(batches)}: {len(batch_text)} chars")
         
-        for i, batch_text in enumerate(batches):
-            print(f"🔊 Batch {i+1}/{len(batches)}: {len(batch_text)} chars")
-            
-            wav = tts_model.generate(
-                text=batch_text,
-                audio_prompt_path=audio_prompt_path,
-                exaggeration=exaggeration,
-                temperature=temperature,
-                cfg_weight=cfgw,
-                min_p=min_p,
-                top_p=top_p,
-                repetition_penalty=repetition_penalty,
-                max_new_tokens=int(max_tokens),
-            )
-            all_wavs.append(wav.squeeze(0))
-            
-            # Nettoyage mémoire seulement tous les 3 lots pour gagner du temps
-            if (i + 1) % 3 == 0:
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                gc.collect()
+        wav = model.generate(
+            language_id=language,
+            text=batch_text,
+            audio_prompt_path=audio_prompt_path,
+            exaggeration=exaggeration,
+            temperature=temperature,
+            cfg_weight=cfgw,
+            min_p=min_p,
+            top_p=top_p,
+            repetition_penalty=repetition_penalty,
+            max_new_tokens=int(max_tokens),
+            use_alignment_analyzer=use_analyzer,  # DISABLED pour toutes les langues
+        )
+        all_wavs.append(wav.squeeze(0))
         
-        del tts_model
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        gc.collect()
-        
-        combined_wav = torch.cat(all_wavs, dim=-1)
-        sr = 24000
-        
-    else:
-        print(f"Using ChatterboxMultilingualTTS ({language})")
-        
-        for i, batch_text in enumerate(batches):
-            print(f"🔊 Batch {i+1}/{len(batches)}: {len(batch_text)} chars")
-            
-            wav = model.generate(
-                language_id=language,
-                text=batch_text,
-                audio_prompt_path=audio_prompt_path,
-                exaggeration=exaggeration,
-                temperature=temperature,
-                cfg_weight=cfgw,
-                min_p=min_p,
-                top_p=top_p,
-                repetition_penalty=repetition_penalty,
-                max_new_tokens=int(max_tokens),
-                use_alignment_analyzer=use_analyzer,  # False pour français = RAPIDE!
-            )
-            all_wavs.append(wav.squeeze(0))
-            
-            # Nettoyage mémoire seulement tous les 3 lots pour gagner du temps
-            if (i + 1) % 3 == 0:
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                gc.collect()
-        
-        combined_wav = torch.cat(all_wavs, dim=-1)
-        sr = model.sr
+        # Nettoyage mémoire seulement tous les 3 lots pour gagner du temps
+        if (i + 1) % 3 == 0:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+    
+    combined_wav = torch.cat(all_wavs, dim=-1)
+    sr = model.sr
     
     print(f"✅ Generated {len(batches)} batches, total: {combined_wav.shape[-1] / sr:.2f}s")
     
@@ -283,10 +237,10 @@ with gr.Blocks(title="Chatterbox TTS - Longue Durée Multilingue") as demo:
             cfg_weight = gr.Slider(0.0, 1, step=.05, label="CFG/Rythme", value=0.5)
             with gr.Accordion("⚙️ Options Avancées", open=False):
                 max_tokens = gr.Slider(
-                    100, 1000, step=50, 
+                    100, 1500, step=50, 
                     label="🚀 Max Tokens", 
-                    value=350,
-                    info="🇫🇷 Français: 300-350 (RAPIDE!) | 🇬🇧 Anglais: 400-500 | Autres: 600-800"
+                    value=800,
+                    info="Plus de tokens = texte plus long généré. 800-1000 recommandé pour textes longs"
                 )
                 batch_size = gr.Slider(
                     200, 800, step=50, 

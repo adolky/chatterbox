@@ -253,15 +253,18 @@ class T3(nn.Module):
         # In order to use the standard HF generate method, we need to extend some methods to inject our custom logic
         # Note the llama-specific logic. Other tfmr types can be added later.
 
-        self.compiled = False
-
+        # Default to None for English models, only create for multilingual
+        alignment_stream_analyzer = None
+        # Allow manual override via use_alignment_analyzer parameter
+        should_use_analyzer = use_alignment_analyzer if use_alignment_analyzer is not None else self.hp.is_multilingual
+        
+        # Check if recompilation needed (first time OR analyzer setting changed)
+        needs_compile = not hasattr(self, 'compiled') or not self.compiled
+        needs_recompile = hasattr(self, '_last_analyzer_state') and self._last_analyzer_state != should_use_analyzer
+        
         # TODO? synchronize the expensive compile function
         # with self.compile_lock:
-        if not self.compiled:
-            # Default to None for English models, only create for multilingual
-            alignment_stream_analyzer = None
-            # Allow manual override via use_alignment_analyzer parameter
-            should_use_analyzer = use_alignment_analyzer if use_alignment_analyzer is not None else self.hp.is_multilingual
+        if needs_compile or needs_recompile:
             if should_use_analyzer:
                 alignment_stream_analyzer = AlignmentStreamAnalyzer(
                     self.tfmr,
@@ -281,6 +284,7 @@ class T3(nn.Module):
             )
             self.patched_model = patched_model
             self.compiled = True
+            self._last_analyzer_state = should_use_analyzer
 
         # # Run normal generate method, which calls our custom extended methods
         # return self.patched_model.generate(

@@ -11,11 +11,38 @@ import re
 import gc
 import warnings
 import logging
+import time
+import sys
 
-# Désactiver les warnings pour une génération plus propre
+# Configuration du logging production
+LOG_DIR = "logs"
+os.makedirs(LOG_DIR, exist_ok=True)
+
+# Créer un nom de fichier de log avec timestamp
+log_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+log_file = os.path.join(LOG_DIR, f"gradio_app_{log_timestamp}.log")
+
+# Configuration du logger
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    handlers=[
+        logging.FileHandler(log_file, encoding='utf-8'),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+
+logger = logging.getLogger(__name__)
+logger.info("="*60)
+logger.info("CHATTERBOX TTS - MODE PRODUCTION")
+logger.info(f"Fichier de log: {log_file}")
+logger.info("="*60)
+
+# Désactiver les warnings pour les autres bibliothèques
 warnings.filterwarnings('ignore')
-logging.getLogger('chatterbox').setLevel(logging.ERROR)
-logging.getLogger('transformers').setLevel(logging.ERROR)
+logging.getLogger('chatterbox').setLevel(logging.WARNING)
+logging.getLogger('transformers').setLevel(logging.WARNING)
+logging.getLogger('gradio').setLevel(logging.INFO)
 
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -33,8 +60,14 @@ def set_seed(seed: int):
 
 
 def load_model():
-    model = ChatterboxMultilingualTTS.from_pretrained(DEVICE)
-    return model
+    logger.info("Chargement du modèle multilingue...")
+    try:
+        model = ChatterboxMultilingualTTS.from_pretrained(DEVICE)
+        logger.info(f"Modèle chargé avec succès sur {DEVICE}")
+        return model
+    except Exception as e:
+        logger.error(f"Erreur lors du chargement du modèle: {e}", exc_info=True)
+        raise
 
 
 def load_text_file(file):
@@ -97,11 +130,15 @@ def load_saved_voice(voice_filename):
 
 
 def generate(model, text, language, audio_prompt_path, exaggeration, temperature, seed_num, cfgw, min_p, top_p, repetition_penalty, batch_size, max_tokens, progress=gr.Progress()):
+    logger.info(f"Nouvelle génération - Langue: {language}, Longueur texte: {len(text)} caractères")
+    
     if model is None:
+        logger.info("Modèle non chargé, chargement en cours...")
         model = ChatterboxMultilingualTTS.from_pretrained(DEVICE)
     if seed_num != 0:
         set_seed(int(seed_num))
     if not text or text.strip() == "":
+        logger.warning("Tentative de génération avec texte vide")
         raise gr.Error("⚠️ Veuillez entrer du texte ou charger un fichier !")
     
     # DÉSACTIVER la détection de répétition pour TOUTES les langues = qualité + vitesse
@@ -225,6 +262,8 @@ def generate(model, text, language, audio_prompt_path, exaggeration, temperature
     # Estimation basée sur le nombre de batches et la longueur totale
     total_chars = len(text)
     num_batches = len(batches)
+    
+    logger.info(f"Texte divisé en {num_batches} batches ({total_chars} caractères)")
     
     # Temps par batch: ~75-90 secondes en moyenne (varie selon GPU)
     estimated_time_per_batch = 80  # secondes
@@ -394,6 +433,9 @@ def generate(model, text, language, audio_prompt_path, exaggeration, temperature
     print(f"   Estimé: {estimated_minutes:.1f} min")
     print(f"   Réel: {total_elapsed_min:.1f} min")
     print(f"   Précision: {accuracy:.0f}%")
+    
+    # Logger les statistiques
+    logger.info(f"Génération terminée - {len(all_wavs)} batches, {total_duration:.2f}s audio, {total_elapsed_min:.2f}min")
     print(f"{'='*60}\n")
     
     if total_duration < expected_duration * 0.7:
@@ -507,4 +549,41 @@ with gr.Blocks(title="Chatterbox TTS - Longue Durée Multilingue") as demo:
     )
 
 if __name__ == "__main__":
-    demo.queue(max_size=50, default_concurrency_limit=1).launch(share=True, server_name="0.0.0.0", server_port=7860, inbrowser=True)
+    try:
+        # Obtenir l'adresse IP locale
+        import socket
+        hostname = socket.gethostname()
+        local_ip = socket.gethostbyname(hostname)
+        
+        logger.info("="*60)
+        logger.info("Démarrage de l'interface Gradio...")
+        logger.info(f"Device: {DEVICE}")
+        logger.info(f"Hostname: {hostname}")
+        logger.info("="*60)
+        logger.info("📡 ACCÈS À L'APPLICATION:")
+        logger.info(f"   🏠 Localhost: http://localhost:7860")
+        logger.info(f"   🌐 Réseau local: http://{local_ip}:7860")
+        logger.info(f"   💻 Depuis autre PC: http://{local_ip}:7860")
+        logger.info("="*60)
+        
+        print("\n" + "="*60)
+        print("🚀 CHATTERBOX TTS - MODE PRODUCTION")
+        print("="*60)
+        print(f"📡 Accès local: http://localhost:7860")
+        print(f"🌐 Accès réseau: http://{local_ip}:7860")
+        print(f"💻 Depuis autre PC: http://{local_ip}:7860")
+        print("="*60 + "\n")
+        
+        demo.queue(max_size=50, default_concurrency_limit=1).launch(
+            share=True, 
+            server_name="0.0.0.0", 
+            server_port=7860, 
+            inbrowser=True
+        )
+    except KeyboardInterrupt:
+        logger.info("Arrêt demandé par l'utilisateur (Ctrl+C)")
+        sys.exit(0)
+    except Exception as e:
+        logger.error(f"Erreur fatale: {e}", exc_info=True)
+        sys.exit(1)
+

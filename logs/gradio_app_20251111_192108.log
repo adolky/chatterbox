@@ -1,0 +1,14 @@
+2025-11-11 19:21:08,032 [INFO] __main__: ============================================================
+2025-11-11 19:21:08,032 [INFO] __main__: CHATTERBOX TTS - MODE PRODUCTION
+2025-11-11 19:21:08,032 [INFO] __main__: Fichier de log: logs\gradio_app_20251111_192108.log
+2025-11-11 19:21:08,032 [INFO] __main__: ============================================================
+2025-11-11 19:21:08,665 [INFO] __main__: Démarrage de l'interface Gradio...
+2025-11-11 19:21:08,666 [INFO] __main__: Device: cuda
+2025-11-11 19:21:08,666 [INFO] __main__: Interface accessible sur: http://localhost:7860
+2025-11-11 19:21:09,109 [INFO] httpx: HTTP Request: GET https://api.gradio.app/pkg-version "HTTP/1.1 200 OK"
+2025-11-11 19:21:11,628 [INFO] httpx: HTTP Request: GET http://localhost:7860/gradio_api/startup-events "HTTP/1.1 200 OK"
+2025-11-11 19:21:13,712 [INFO] httpx: HTTP Request: HEAD http://localhost:7860/ "HTTP/1.1 200 OK"
+2025-11-11 19:21:14,517 [INFO] httpx: HTTP Request: GET https://api.gradio.app/v3/tunnel-request "HTTP/1.1 200 OK"
+2025-11-11 19:21:22,985 [INFO] __main__: Chargement du modèle multilingue...
+2025-11-11 19:21:37,149 [INFO] root: input frame rate=25
+2025-11-11 19:21:44,701 [INFO] __main__: Modèle chargé avec succès sur cuda

@@ -1,0 +1,28 @@
+======================================== 
+DEMARRAGE CHATTERBOX TTS - MODE PRODUCTION 
+Date: 2025-11-11 19:20:44,55 
+======================================== 
+[19:20:44,57] D\u00e9marrage de Chatterbox TTS en mode production... 
+[19:20:44,58] R\u00e9pertoire: c:\Users\adolk\Documents\Youtube ai audio\chatterbox 
+[19:20:44,60] Lancement de l'application... 
+[19:20:44,62] D\u00e9marrage de l'application... 
+2025-11-11 19:21:08,032 [INFO] __main__: ============================================================
+2025-11-11 19:21:08,032 [INFO] __main__: CHATTERBOX TTS - MODE PRODUCTION
+2025-11-11 19:21:08,032 [INFO] __main__: Fichier de log: logs\gradio_app_20251111_192108.log
+2025-11-11 19:21:08,032 [INFO] __main__: ============================================================
+2025-11-11 19:21:08,665 [INFO] __main__: Démarrage de l'interface Gradio...
+2025-11-11 19:21:08,666 [INFO] __main__: Device: cuda
+2025-11-11 19:21:08,666 [INFO] __main__: Interface accessible sur: http://localhost:7860
+* Running on local URL:  http://0.0.0.0:7860
+2025-11-11 19:21:09,109 [INFO] httpx: HTTP Request: GET https://api.gradio.app/pkg-version "HTTP/1.1 200 OK"
+2025-11-11 19:21:11,628 [INFO] httpx: HTTP Request: GET http://localhost:7860/gradio_api/startup-events "HTTP/1.1 200 OK"
+2025-11-11 19:21:13,712 [INFO] httpx: HTTP Request: HEAD http://localhost:7860/ "HTTP/1.1 200 OK"
+2025-11-11 19:21:14,517 [INFO] httpx: HTTP Request: GET https://api.gradio.app/v3/tunnel-request "HTTP/1.1 200 OK"
+* Running on public URL: https://96328f30b69c550c45.gradio.live
+
+This share link expires in 1 week. For free permanent hosting and GPU upgrades, run `gradio deploy` from the terminal in the working directory to deploy to Hugging Face Spaces (https://huggingface.co/spaces)
+2025-11-11 19:21:22,985 [INFO] __main__: Chargement du modèle multilingue...
+Fetching 6 files:   0%|          | 0/6 [00:00<?, ?it/s]Fetching 6 files: 100%|##########| 6/6 [00:00<?, ?it/s]
+2025-11-11 19:21:37,149 [INFO] root: input frame rate=25
+loaded PerthNet (Implicit) at step 250,000
+2025-11-11 19:21:44,701 [INFO] __main__: Modèle chargé avec succès sur cuda
